@@ -135,7 +135,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
 
   const loadOlder = async () => {
     if (!hasMore || !messages.length) return;
-    const { data } = await supabase.from("messages").select("*").eq("group_id", groupId).lt("created_at", messages[0].created_at).order("created_at", { ascending: false }).limit(PAGE);
+    const { data } = await supabase.from("messages").select("*").eq("group_id", groupId).lt("created_at", messages[0]!.created_at).order("created_at", { ascending: false }).limit(PAGE);
     const older = (data ?? []).reverse();
     prevHeight.current = scrollRef.current?.scrollHeight ?? null;
     setMessages((l) => [...older, ...l]);
@@ -154,7 +154,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
     if (!messages.some((m) => m.id === id) && messages.length) {
       const { data: target } = await supabase.from("messages").select("created_at").eq("id", id).single();
       if (!target) return;
-      const { data } = await supabase.from("messages").select("*").eq("group_id", groupId).gte("created_at", target.created_at).lt("created_at", messages[0].created_at).order("created_at");
+      const { data } = await supabase.from("messages").select("*").eq("group_id", groupId).gte("created_at", target.created_at).lt("created_at", messages[0]!.created_at).order("created_at");
       const older = data ?? [];
       stickBottom.current = false;
       setMessages((l) => [...older, ...l]);
@@ -207,7 +207,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   const remove = async (m: Message) => {
     if (!confirm("למחוק את ההודעה?")) return;
     const { data: path, error } = await supabase.rpc("delete_message", { _m: m.id });
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     if (path) await supabase.storage.from("attachments").remove([path]);
   };
 
@@ -219,7 +219,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   const submitReport = async () => {
     if (!reporting) return;
     const { error } = await supabase.from("reports").insert({ message_id: reporting.id, group_id: groupId, reporter_id: userId, reason: reportReason.trim() });
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     toast.success("הדיווח נשלח למנהלים");
     setReporting(null); setReportReason("");
   };

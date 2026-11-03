@@ -31,7 +31,7 @@ export function GroupSidebar({ group, members, userId, isAdmin, groups, onSwitch
   };
   const save = async () => {
     const { error } = await supabase.rpc("update_group", { _g: group.id, _name: name, _description: desc });
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     setEditOpen(false);
     onChanged();
   };
@@ -121,7 +121,7 @@ export function ContextPanel({ tab, setTab, groupId, userId, isAdmin, members, p
   onJump: (id: string) => void; onChanged: () => void; reportsVersion: number;
 }) {
   const pending = members.filter((m) => m.status === "pending");
-  const [reports, setReports] = useState<(ReportRow & { msg?: Message })[]>([]);
+  const [reports, setReports] = useState<(ReportRow & { msg?: Message | undefined })[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [invite, setInvite] = useState<string | null>(null);
 
@@ -149,7 +149,7 @@ export function ContextPanel({ tab, setTab, groupId, userId, isAdmin, members, p
 
   const createInvite = async () => {
     const { data, error } = await supabase.from("invites").insert({ group_id: groupId, created_by: userId }).select("token").single();
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     setInvite(data.token);
   };
   const inviteUrl = invite ? `${window.location.origin}/join/${invite}` : "";
@@ -158,10 +158,10 @@ export function ContextPanel({ tab, setTab, groupId, userId, isAdmin, members, p
     const { error } = await supabase.rpc("decide_request", { _g: groupId, _u: u, _approve: approve });
     if (error) toast.error(errorText(error)); else onChanged();
   };
-  const resolve = async (r: ReportRow & { msg?: Message }, action: "delete" | "remove" | "dismiss") => {
+  const resolve = async (r: ReportRow & { msg?: Message | undefined }, action: "delete" | "remove" | "dismiss") => {
     if (action !== "dismiss" && !confirm(action === "delete" ? "למחוק את ההודעה?" : "להסיר את הכותב מהקבוצה?")) return;
     const { error } = await supabase.rpc("resolve_report", { _r: r.id, _action: action });
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     if (action === "delete" && r.msg?.attachment_path) await supabase.storage.from("attachments").remove([r.msg.attachment_path]);
     setReports((x) => x.filter((y) => y.id !== r.id));
     onChanged();

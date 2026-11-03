@@ -31,8 +31,8 @@ export function Composer(p: Props) {
   }, [p.droppedFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const upload = async (file: File) => {
-    if (isBlockedFile(file.name)) return toast.error("סוג הקובץ הזה חסום");
-    if (file.size > MAX_FILE_BYTES) return toast.error("הקובץ גדול מ-100MB");
+    if (isBlockedFile(file.name)) return void toast.error("סוג הקובץ הזה חסום");
+    if (file.size > MAX_FILE_BYTES) return void toast.error("הקובץ גדול מ-100MB");
     const signal = { cancelled: false };
     setUploading({ name: file.name, signal });
     const ok = await p.onUpload(file, text.trim(), signal);
@@ -51,7 +51,7 @@ export function Composer(p: Props) {
     setText(v);
     const caret = ref.current?.selectionStart ?? v.length;
     const m = /(^|\s)@([^\s@]*)$/.exec(v.slice(0, caret));
-    setMention(m ? m[2] : null);
+    setMention(m ? m[2] ?? "" : null);
   };
 
   const suggestions = mention === null ? [] : p.members.filter((m) => m.profile?.display_name.toLowerCase().includes(mention.toLowerCase())).slice(0, 6);
@@ -108,7 +108,7 @@ export function Composer(p: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                if (suggestions.length) pickMention(suggestions[0].profile!.display_name);
+                if (suggestions.length) pickMention(suggestions[0]!.profile!.display_name);
                 else send();
               }
               if (e.key === "Escape") { setMention(null); p.onClearQuote(); }

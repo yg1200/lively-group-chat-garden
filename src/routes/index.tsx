@@ -146,7 +146,7 @@ function NoGroup({ onCreated }: { onCreated: (id: string) => void }) {
     setBusy(true);
     const { data, error } = await supabase.rpc("create_group", { _name: name, _description: desc });
     setBusy(false);
-    if (error) return toast.error(errorText(error));
+    if (error) return void toast.error(errorText(error));
     onCreated(data);
   };
   return (

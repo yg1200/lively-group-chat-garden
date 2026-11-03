@@ -49,7 +49,7 @@
   --color-mark: var(--mark);
   --color-quote: var(--quote);
   --color-ok: var(--ok);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--app-font);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -67,7 +67,7 @@
 
 :root {
   --radius: 0.75rem;
-  --font-sans: "Heebo", "Google Sans", Roboto, Arial, sans-serif;
+  --app-font: "Heebo", "Google Sans", Roboto, Arial, sans-serif;
   --background: oklch(0.965 0.008 250);
   --foreground: oklch(0.235 0 0);
   --card: oklch(1 0 0);
@@ -143,6 +143,6 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans);
+    font-family: var(--app-font);
   }
 }

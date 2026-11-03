@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Group chat permissions are enforced in the database (row rules + security-definer functions like decide_request, delete_message); the client only calls them. Why: the spec requires server-side enforcement.

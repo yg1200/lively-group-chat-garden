@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Search, LogOut, Users, PanelLeft, X, Upload } from "lucide-react";
+import { MessageSquare, Search, LogOut, Settings, PanelLeft, X, Upload, Bell } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ThreadPanel } from "./ThreadPanel";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -10,7 +12,7 @@ import { Avatar } from "./Avatar";
 import { MessageItem } from "./MessageItem";
 import { Composer } from "./Composer";
 import { ContextPanel, GroupSidebar, type PanelTab } from "./Panels";
-import { errorText, formatDay, type Group, type Member, type Message, type Quote, type Reaction } from "@/lib/chat";
+import { errorText, formatDay, formatTime, seenBy, summarizeThread, type Group, type Member, type Message, type Notification, type Quote, type Reaction, type ThreadSummary } from "@/lib/chat";
 
 const PAGE = 50;
 const MEMBER_SELECT = "*, profile:profiles!group_members_user_id_fkey(id,display_name,email,avatar_url,last_seen_at), inviter:profiles!group_members_invited_by_fkey(id,display_name)";
@@ -37,6 +39,14 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   const [reportsVersion, setReportsVersion] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [dropped, setDropped] = useState<File | null>(null);
+  const [threadRoot, setThreadRoot] = useState<Message | null>(null);
+  const [threadReplies, setThreadReplies] = useState<Message[]>([]);
+  const [threadFocus, setThreadFocus] = useState<string | null>(null);
+  const [threadReplyMap, setThreadReplyMap] = useState<Map<string, Pick<Message, "id" | "author_id" | "created_at">[]>>(new Map());
+  const [rootAuthors, setRootAuthors] = useState<Map<string, string | null>>(new Map());
+  const [notifs, setNotifs] = useState<Notification[]>([]);
+  const threadRootRef = useRef<string | null>(null);
+  threadRootRef.current = threadRoot?.id ?? null;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -68,6 +78,29 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
     setReactions((r) => [...r.filter((x) => !ids.includes(x.message_id)), ...(data ?? [])]);
   }, []);
 
+  // thread metadata: reply lists per root + root authors (for participation)
+  const loadThreadMeta = useCallback(async (rootIds: string[]) => {
+    const ids = [...new Set(rootIds)];
+    if (!ids.length) return;
+    const [{ data: reps }, { data: roots }] = await Promise.all([
+      supabase.from("messages").select("id, author_id, created_at, thread_root_id").in("thread_root_id", ids),
+      supabase.from("messages").select("id, author_id").in("id", ids),
+    ]);
+    setThreadReplyMap((old) => {
+      const next = new Map(old);
+      ids.forEach((id) => next.set(id, []));
+      (reps ?? []).forEach((r) => next.get(r.thread_root_id!)!.push(r));
+      return next;
+    });
+    setRootAuthors((old) => { const next = new Map(old); (roots ?? []).forEach((r) => next.set(r.id, r.author_id)); return next; });
+  }, []);
+  const metaFor = useCallback((list: Message[]) => loadThreadMeta(list.map((m) => m.thread_root_id ?? m.id)), [loadThreadMeta]);
+
+  const loadNotifs = useCallback(async () => {
+    const { data } = await supabase.from("notifications").select("*").eq("user_id", userId).eq("group_id", groupId).is("read_at", null).order("created_at", { ascending: false }).limit(50);
+    setNotifs(data ?? []);
+  }, [userId, groupId]);
+
   // initial load
   useEffect(() => {
     (async () => {
@@ -79,9 +112,11 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
       setMessages(list);
       setHasMore((data ?? []).length === PAGE);
       loadReactions(list.map((m) => m.id));
+      metaFor(list);
+      loadNotifs();
       supabase.rpc("mark_read", { _g: groupId });
     })();
-  }, [groupId, userId, loadGroup, loadMembers, loadPinned, loadReactions]);
+  }, [groupId, userId, loadGroup, loadMembers, loadPinned, loadReactions, metaFor, loadNotifs]);
 
   // presence heartbeat
   useEffect(() => {
@@ -96,12 +131,20 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `group_id=eq.${groupId}` }, (p) => {
         const m = p.new as Message;
         setMessages((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]));
+        if (m.thread_root_id) {
+          const rid = m.thread_root_id;
+          setThreadReplyMap((old) => { const next = new Map(old); const l = next.get(rid) ?? []; if (!l.some((x) => x.id === m.id)) next.set(rid, [...l, m]); return next; });
+          if (threadRootRef.current === rid) setThreadReplies((l) => (l.some((x) => x.id === m.id) ? l : [...l, m]));
+          setRootAuthors((old) => { if (old.has(rid)) return old; loadThreadMeta([rid]); return old; });
+        }
         if (m.kind === "system") { loadMembers(); loadGroup(); }
         if (document.visibilityState === "visible") supabase.rpc("mark_read", { _g: groupId });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `group_id=eq.${groupId}` }, (p) => {
         const m = p.new as Message;
         setMessages((list) => list.map((x) => (x.id === m.id ? m : x)));
+        setThreadReplies((list) => list.map((x) => (x.id === m.id ? m : x)));
+        setThreadRoot((r) => (r?.id === m.id ? m : r));
         loadPinned();
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "reactions", filter: `group_id=eq.${groupId}` }, (p) => {
@@ -117,9 +160,10 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
         if (row.user_id === userId && row.status !== "active") onMembershipChanged();
         else loadMembers();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, () => loadNotifs())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [groupId, userId, loadMembers, loadGroup, loadPinned, onMembershipChanged]);
+  }, [groupId, userId, loadMembers, loadGroup, loadPinned, onMembershipChanged, loadThreadMeta, loadNotifs]);
 
   // scrolling
   useLayoutEffect(() => {
@@ -141,7 +185,27 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
     setMessages((l) => [...older, ...l]);
     setHasMore((data ?? []).length === PAGE);
     loadReactions(older.map((m) => m.id));
+    metaFor(older);
   };
+
+  const openThread = async (rootId: string, focus: string | null = null) => {
+    const root = messages.find((m) => m.id === rootId) ?? (await supabase.from("messages").select("*").eq("id", rootId).single()).data;
+    if (!root) return;
+    const { data } = await supabase.from("messages").select("*").eq("thread_root_id", rootId).order("created_at");
+    const replies = data ?? [];
+    setThreadRoot(root);
+    setThreadReplies(replies);
+    setThreadFocus(focus);
+    loadReactions([root.id, ...replies.map((r) => r.id)]);
+    setSideOpen(false);
+    setPanelOpen(true);
+    const unread = notifs.filter((n) => n.thread_root_id === rootId).map((n) => n.id);
+    if (unread.length) {
+      setNotifs((l) => l.filter((n) => !unread.includes(n.id)));
+      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", unread);
+    }
+  };
+  const closeThread = () => { setThreadRoot(null); setThreadReplies([]); setThreadFocus(null); };
 
   const onScroll = () => {
     const el = scrollRef.current!;
@@ -150,6 +214,9 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   };
 
   const jumpTo = async (id: string) => {
+    const known = messages.find((m) => m.id === id) ?? threadReplies.find((m) => m.id === id);
+    const rootOf = known ? known.thread_root_id : (await supabase.from("messages").select("thread_root_id").eq("id", id).single()).data?.thread_root_id;
+    if (rootOf && !isVisible(known ?? null)) return void openThread(rootOf, id);
     setSideOpen(false); setPanelOpen(false);
     if (!messages.some((m) => m.id === id) && messages.length) {
       const { data: target } = await supabase.from("messages").select("created_at").eq("id", id).single();
@@ -159,6 +226,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
       stickBottom.current = false;
       setMessages((l) => [...older, ...l]);
       loadReactions(older.map((m) => m.id));
+      metaFor(older);
     }
     setTimeout(() => {
       document.getElementById(`m-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -169,20 +237,25 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
 
   // actions
   const send = async (body: string, extra: Partial<Message> = {}) => {
-    stickBottom.current = true;
-    const { data, error } = await supabase.from("messages").insert({ group_id: groupId, author_id: userId, body, quote: quote ?? null, ...extra }).select().single();
+    const inThread = !!extra.thread_root_id;
+    if (!inThread) stickBottom.current = true;
+    const { data, error } = await supabase.from("messages").insert({ group_id: groupId, author_id: userId, body, quote: inThread ? null : quote ?? null, ...extra }).select().single();
     if (error) { toast.error(errorText(error)); return false; }
     setMessages((l) => (l.some((x) => x.id === data.id) ? l : [...l, data]));
-    setQuote(null);
+    if (data.thread_root_id) {
+      const rid = data.thread_root_id;
+      setThreadReplies((l) => (l.some((x) => x.id === data.id) ? l : [...l, data]));
+      setThreadReplyMap((old) => { const next = new Map(old); const l = next.get(rid) ?? []; if (!l.some((x) => x.id === data.id)) next.set(rid, [...l, data]); return next; });
+    } else setQuote(null);
     return true;
   };
 
-  const upload = async (file: File, body: string, signal: { cancelled: boolean }) => {
+  const upload = async (file: File, body: string, signal: { cancelled: boolean }, base: Partial<Message> = {}) => {
     const path = `${groupId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
     const { error } = await supabase.storage.from("attachments").upload(path, file, { contentType: file.type });
     if (signal.cancelled) { if (!error) await supabase.storage.from("attachments").remove([path]); return false; }
     if (error) { toast.error("ההעלאה נכשלה"); return false; }
-    return send(body, { attachment_path: path, attachment_name: file.name, attachment_type: file.type, attachment_size: file.size });
+    return send(body, { ...base, attachment_path: path, attachment_name: file.name, attachment_type: file.type, attachment_size: file.size });
   };
 
   const react = async (m: Message, emoji: string) => {
@@ -236,13 +309,38 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
 
   const signOut = async () => { await supabase.auth.signOut(); };
 
+  const participates = (rootId: string) => rootAuthors.get(rootId) === userId || (threadReplyMap.get(rootId) ?? []).some((r) => r.author_id === userId);
+  function isVisible(m: Message | null) {
+    if (!m) return false;
+    if (!m.thread_root_id) return true;
+    return participates(m.thread_root_id) || (!!myName && m.body.includes(`@${myName}`));
+  }
+  const visible = messages.filter(isVisible);
+  const summaryOf = (id: string): ThreadSummary => summarizeThread(threadReplyMap.get(id) ?? []);
+  const actions = {
+    onReact: (m: Message, e: string) => react(m, e),
+    onEdit: edit,
+    onDelete: remove,
+    onPin: pin,
+    onReport: (m: Message) => setReporting(m),
+  };
+
   if (!group) return <div className="flex h-screen items-center justify-center text-muted-foreground">טוען את הקבוצה…</div>;
 
   const pendingCount = isAdmin ? members.filter((m) => m.status === "pending").length : 0;
-  const firstUnread = lastRead ? messages.find((m) => m.created_at > lastRead && m.author_id !== userId && m.kind === "user")?.id : undefined;
+  const firstUnread = lastRead ? visible.find((m) => m.created_at > lastRead && m.author_id !== userId && m.kind === "user")?.id : undefined;
 
   const sidebar = <GroupSidebar group={group} members={members} userId={userId} isAdmin={isAdmin} groups={groups} onSwitchGroup={onSwitchGroup} onChanged={() => { loadMembers(); loadGroup(); onMembershipChanged(); }} />;
-  const panel = (
+  const panel = threadRoot ? (
+    <ThreadPanel
+      {...actions}
+      root={threadRoot} replies={threadReplies} focusId={threadFocus} groupId={groupId} userId={userId} isAdmin={isAdmin}
+      members={members} memberMap={memberMap} reactions={reactions} memberNames={memberNames} myName={myName} nameOf={nameOf}
+      onClose={closeThread}
+      onSend={(b, q) => send(b, { thread_root_id: threadRoot.id, quote: q })}
+      onUpload={(f, b, s, q) => upload(f, b, s, { thread_root_id: threadRoot.id, quote: q })}
+    />
+  ) : (
     <ContextPanel
       tab={tab} setTab={setTab} groupId={groupId} userId={userId} isAdmin={isAdmin} members={members} pinned={pinned}
       searchResults={searchResults} searchQuery={search.trim()} nameOf={nameOf} onJump={jumpTo} reportsVersion={reportsVersion}
@@ -253,8 +351,8 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   return (
     <div className="flex h-dvh flex-col px-2 md:px-4">
       <header className="flex min-h-16 flex-none items-center gap-3 py-2">
-        <button aria-label="חברי הקבוצה" onClick={() => setSideOpen(true)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary lg:hidden"><Users className="size-5" /></button>
-        <div className="hidden items-center gap-3 md:flex lg:w-[268px]">
+        <button aria-label="הגדרות הקבוצה" title="הגדרות הקבוצה" onClick={() => setSideOpen(true)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary"><Settings className="size-5" /></button>
+        <div className="hidden items-center gap-3 md:flex">
           <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><MessageSquare className="size-5" /></div>
           <span className="text-xl font-medium text-muted-foreground">צ'אט הקבוצה</span>
         </div>
@@ -267,6 +365,31 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
           <PanelLeft className="size-5" />
           {pendingCount > 0 && <span className="absolute -top-0.5 -start-0.5 min-w-[18px] rounded-full bg-destructive px-1 text-[11px] font-bold text-destructive-foreground">{pendingCount}</span>}
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="התראות" className="relative rounded-full p-2 text-muted-foreground hover:bg-secondary">
+              <Bell className="size-5" />
+              {notifs.length > 0 && <span className="absolute -top-0.5 -start-0.5 min-w-[18px] rounded-full bg-destructive px-1 text-[11px] font-bold text-destructive-foreground">{notifs.length}</span>}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-72" dir="rtl">
+            <DropdownMenuLabel>התראות</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notifs.length === 0 && <div className="px-2 py-4 text-center text-sm text-muted-foreground">אין התראות חדשות</div>}
+            {notifs.map((n) => (
+              <DropdownMenuItem key={n.id} onClick={() => openThread(n.thread_root_id, n.message_id)} className="flex-col items-start gap-0.5">
+                <span className="text-sm"><b className="font-medium">{nameOf(n.actor_id)}</b> הגיב/ה בשרשור שלך</span>
+                <span className="text-xs text-muted-foreground">{formatTime(n.created_at)}</span>
+              </DropdownMenuItem>
+            ))}
+            {notifs.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={async () => { const ids = notifs.map((n) => n.id); setNotifs([]); await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids); }}>סימון הכל כנקרא</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="flex items-center gap-2">
           <div className="hidden text-end leading-tight sm:block">
             <b className="block text-sm font-medium">{myName}</b>
@@ -278,7 +401,6 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3 pb-3">
-        <aside className="hidden w-[280px] flex-none rounded-[20px] bg-card lg:block">{sidebar}</aside>
 
         <main
           className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] bg-card"
@@ -289,13 +411,13 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
           <div className="flex flex-none items-center gap-3 border-b px-5 py-3">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-lg font-medium">{group.name}</h1>
-              <p className="text-xs text-muted-foreground">{activeMembers.length} חברים</p>
+              <button onClick={() => setSideOpen(true)} className="text-xs text-muted-foreground hover:text-primary">{activeMembers.length} חברים</button>
             </div>
           </div>
           <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 md:px-4">
             {!hasMore && <p className="py-6 text-center text-xs text-muted-foreground">תחילת השיחה</p>}
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
+            {visible.map((m, i) => {
+              const prev = visible[i - 1];
               const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
               const showHeader = newDay || !prev || prev.kind !== "user" || prev.author_id !== m.author_id || new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60000 || m.id === firstUnread;
               return (
@@ -320,6 +442,10 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
                     onDelete={() => remove(m)}
                     onPin={() => pin(m)}
                     onReport={() => setReporting(m)}
+                    seen={seenBy(m, members)}
+                    {...(m.thread_root_id
+                      ? { inThreadLink: () => openThread(m.thread_root_id!, m.id) }
+                      : (() => { const t = summaryOf(m.id); return { thread: t, threadAuthors: t.authors.map((a) => memberMap.get(a)).filter((x): x is Member => !!x), onOpenThread: () => openThread(m.id) }; })())}
                   />
                 </Fragment>
               );
@@ -337,7 +463,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
       </div>
 
       <Sheet open={sideOpen} onOpenChange={setSideOpen}>
-        <SheetContent side="right" className="w-[300px] p-0" dir="rtl"><SheetTitle className="sr-only">חברי הקבוצה</SheetTitle>{sidebar}</SheetContent>
+        <SheetContent side="right" className="w-[300px] p-0" dir="rtl"><SheetTitle className="sr-only">הגדרות הקבוצה</SheetTitle>{sidebar}</SheetContent>
       </Sheet>
       <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
         <SheetContent side="left" className="w-[340px] p-0 xl:hidden" dir="rtl"><SheetTitle className="sr-only">לוח צד</SheetTitle>{panel}</SheetContent>

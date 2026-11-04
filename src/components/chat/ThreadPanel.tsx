@@ -56,7 +56,7 @@ export function ThreadPanel(p: Props) {
     prevLen.current = p.replies.length;
   }, [p.replies.length]);
 
-  const item = (m: Message, isRoot: boolean) => (
+  const item = (m: Message) => (
     <div id={`t-${m.id}`} key={m.id}>
       <MessageItem
         msg={m}
@@ -77,7 +77,6 @@ export function ThreadPanel(p: Props) {
         onPin={() => p.onPin(m)}
         onReport={() => p.onReport(m)}
         seen={seenBy(m, p.members)}
-        {...(isRoot ? {} : {})}
       />
     </div>
   );
@@ -89,11 +88,11 @@ export function ThreadPanel(p: Props) {
         <button aria-label="סגירת השרשור" onClick={p.onClose} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"><X className="size-4" /></button>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
-        {item(p.root, true)}
+        {item(p.root)}
         <div className="my-2 flex items-center gap-3 px-3 text-xs text-muted-foreground">
           {p.replies.length === 1 ? "תגובה אחת" : `${p.replies.length} תגובות`}<div className="h-px flex-1 bg-border" />
         </div>
-        {p.replies.map((m) => item(m, false))}
+        {p.replies.map((m) => item(m))}
       </div>
       <Composer
         groupId={p.groupId}

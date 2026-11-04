@@ -97,7 +97,8 @@ export function ThreadPanel(p: Props) {
       <Composer
         groupId={p.groupId}
         draftKey={`gc.draft.thread.${p.root.id}`}
-        placeholder="תגובה בשרשור…"
+        placeholder="שליחת תשובה"
+        small
         members={activeMembers}
         quote={quote}
         onClearQuote={() => setQuote(null)}

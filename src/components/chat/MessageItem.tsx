@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Pin, Reply, Pencil, Trash2, Flag, SmilePlus, FileText, Download } from "lucide-react";
+import { Pin, Reply, Pencil, Trash2, Flag, SmilePlus, FileText, Download, MessagesSquare, MoreVertical, Eye } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Avatar } from "./Avatar";
-import { QUICK_EMOJI, deletedLabel, formatSize, formatTime, type Member, type Message, type Quote, type Reaction } from "@/lib/chat";
+import { QUICK_EMOJI, deletedLabel, formatSize, formatTime, type Member, type Message, type Quote, type Reaction, type ThreadSummary } from "@/lib/chat";
 
 const urlCache = new Map<string, string>();
 
@@ -59,6 +60,11 @@ type Props = {
   onDelete: () => void;
   onPin: () => void;
   onReport: () => void;
+  seen: Member[];
+  thread?: ThreadSummary;
+  threadAuthors?: Member[];
+  onOpenThread?: () => void;
+  inThreadLink?: () => void;
 };
 
 export function MessageItem(p: Props) {
@@ -100,6 +106,9 @@ export function MessageItem(p: Props) {
             {p.author?.role === "admin" && <span className="rounded bg-accent px-1.5 text-[11px] text-accent-foreground">מנהל</span>}
             <span className="text-xs text-muted-foreground">{formatTime(msg.created_at)}</span>
           </div>
+        )}
+        {p.inThreadLink && (
+          <button onClick={p.inThreadLink} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"><MessagesSquare className="size-3" /> תגובה בשרשור · פתיחה</button>
         )}
         {msg.pinned_at && !deleted && (
           <div className="flex items-center gap-1 text-xs text-primary"><Pin className="size-3" /> הודעה נעוצה</div>
@@ -171,11 +180,19 @@ export function MessageItem(p: Props) {
             ))}
           </div>
         )}
+        {p.thread && p.thread.count > 0 && p.onOpenThread && (
+          <button onClick={p.onOpenThread} className="mt-1 flex items-center gap-2 rounded-lg px-1 py-0.5 text-sm font-medium text-primary hover:bg-accent">
+            <span className="flex -space-x-1.5 rtl:space-x-reverse">
+              {(p.threadAuthors ?? []).map((a) => <span key={a.user_id} className="rounded-full ring-2 ring-card"><Avatar profile={a.profile} size={20} /></span>)}
+            </span>
+            {p.thread.count === 1 ? "תגובה אחת" : `${p.thread.count} תגובות`}
+          </button>
+        )}
       </div>
 
-      {!deleted && !editing && (
+      {!editing && (deleted ? !!p.onOpenThread : true) && (
         <div className="absolute -top-3 end-3 hidden items-center gap-0.5 rounded-full border bg-card p-0.5 shadow-sm group-hover:flex group-focus-within:flex">
-          <Popover>
+          {!deleted && <Popover>
             <PopoverTrigger asChild>
               <IconAction label="תגובה באימוג'י"><SmilePlus /></IconAction>
             </PopoverTrigger>
@@ -184,12 +201,27 @@ export function MessageItem(p: Props) {
                 <button key={e} className="rounded-md p-1 text-xl hover:bg-muted" onClick={() => p.onReact(e)}>{e}</button>
               ))}
             </PopoverContent>
-          </Popover>
-          <IconAction label="ציטוט" onClick={() => p.onQuote({ id: msg.id, author: name, body: msg.body || msg.attachment_name || "" })}><Reply /></IconAction>
-          {mine && msg.body && <IconAction label="עריכה" onClick={() => { setDraft(msg.body); setEditing(true); }}><Pencil /></IconAction>}
-          {p.isAdmin && <IconAction label={msg.pinned_at ? "ביטול הצמדה" : "הצמדה"} onClick={p.onPin}><Pin /></IconAction>}
-          {!mine && <IconAction label="דיווח למנהל" onClick={p.onReport}><Flag /></IconAction>}
-          {(mine || p.isAdmin) && <IconAction label="מחיקה" onClick={p.onDelete} danger><Trash2 /></IconAction>}
+          </Popover>}
+          {p.onOpenThread && <IconAction label="תגובה בשרשור" onClick={p.onOpenThread}><MessagesSquare /></IconAction>}
+          {!deleted && <IconAction label="ציטוט" onClick={() => p.onQuote({ id: msg.id, author: name, body: msg.body || msg.attachment_name || "" })}><Reply /></IconAction>}
+          {!deleted && mine && msg.body && <IconAction label="עריכה" onClick={() => { setDraft(msg.body); setEditing(true); }}><Pencil /></IconAction>}
+          {!deleted && p.isAdmin && !msg.thread_root_id && <IconAction label={msg.pinned_at ? "ביטול הצמדה" : "הצמדה"} onClick={p.onPin}><Pin /></IconAction>}
+          {!deleted && !mine && <IconAction label="דיווח למנהל" onClick={p.onReport}><Flag /></IconAction>}
+          {!deleted && (mine || p.isAdmin) && <IconAction label="מחיקה" onClick={p.onDelete} danger><Trash2 /></IconAction>}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconAction label="עוד"><MoreVertical /></IconAction>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 w-56 overflow-y-auto" dir="rtl">
+              <DropdownMenuLabel className="flex items-center gap-2"><Eye className="size-4" /> נצפתה על ידי {p.seen.length}</DropdownMenuLabel>
+              {p.seen.length > 0 && <DropdownMenuSeparator />}
+              {p.seen.map((m) => (
+                <DropdownMenuItem key={m.user_id} className="gap-2" onSelect={(e) => e.preventDefault()}>
+                  <Avatar profile={m.profile} size={20} /> <span className="truncate">{m.profile?.display_name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
     </div>

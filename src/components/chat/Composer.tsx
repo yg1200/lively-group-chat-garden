@@ -13,10 +13,12 @@ type Props = {
   onUpload: (file: File, body: string, signal: { cancelled: boolean }) => Promise<boolean>;
   droppedFile: File | null;
   onDroppedHandled: () => void;
+  draftKey?: string;
+  placeholder?: string;
 };
 
 export function Composer(p: Props) {
-  const draftKey = `gc.draft.${p.groupId}`;
+  const draftKey = p.draftKey ?? `gc.draft.${p.groupId}`;
   const [text, setText] = useState("");
   const [uploading, setUploading] = useState<{ name: string; signal: { cancelled: boolean } } | null>(null);
   const [mention, setMention] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export function Composer(p: Props) {
             value={text}
             rows={1}
             dir="auto"
-            placeholder="כתבו הודעה… (@ לאזכור)"
+            placeholder={p.placeholder ?? "כתבו הודעה… (@ לאזכור)"}
             onChange={(e) => onChange(e.target.value)}
             onPaste={(e) => { const f = e.clipboardData.files?.[0]; if (f) { e.preventDefault(); upload(f); } }}
             onKeyDown={(e) => {

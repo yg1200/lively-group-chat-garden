@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Search, LogOut, Settings, PanelLeft, X, Upload, Bell } from "lucide-react";
+import { MessageSquare, Search, LogOut, PanelLeft, X, Upload, Bell, Menu, Sun, Moon, ChevronDown, Pin, Link2, Users } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThreadPanel } from "./ThreadPanel";
 import { toast } from "sonner";
@@ -8,7 +8,9 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "./Avatar";
+import { Avatar, SpaceAvatar } from "./Avatar";
+import { CreateSpaceDialog, SpaceNav } from "./SpaceNav";
+import { useTheme } from "@/lib/theme";
 import { MessageItem } from "./MessageItem";
 import { Composer } from "./Composer";
 import { ContextPanel, GroupSidebar, type PanelTab } from "./Panels";
@@ -34,6 +36,10 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
   const [searchResults, setSearchResults] = useState<Message[] | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [pinIdx, setPinIdx] = useState(0);
+  const { theme, toggle: toggleTheme } = useTheme();
   const [reporting, setReporting] = useState<Message | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportsVersion, setReportsVersion] = useState(0);
@@ -327,9 +333,18 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
 
   if (!group) return <div className="flex h-screen items-center justify-center text-muted-foreground">טוען את הקבוצה…</div>;
 
-  const pendingCount = isAdmin ? members.filter((m) => m.status === "pending").length : 0;
+  const pending = members.filter((m) => m.status === "pending");
+  const pendingCount = isAdmin ? pending.length : 0;
   const firstUnread = lastRead ? visible.find((m) => m.created_at > lastRead && m.author_id !== userId && m.kind === "user")?.id : undefined;
 
+  const nav = (
+    <SpaceNav
+      groups={groups} currentId={groupId} isAdmin={isAdmin} pendingCount={pendingCount}
+      onSwitch={(id) => { setNavOpen(false); onSwitchGroup(id); }}
+      onCreate={() => { setNavOpen(false); setCreateOpen(true); }}
+      onOpenAdmin={() => { setNavOpen(false); setTab(pending.length > 0 ? "requests" : "reports"); setPanelOpen(true); }}
+    />
+  );
   const sidebar = <GroupSidebar group={group} members={members} userId={userId} isAdmin={isAdmin} groups={groups} onSwitchGroup={onSwitchGroup} onChanged={() => { loadMembers(); loadGroup(); onMembershipChanged(); }} />;
   const panel = threadRoot ? (
     <ThreadPanel
@@ -350,24 +365,27 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
 
   return (
     <div className="flex h-dvh flex-col px-2 md:px-4">
-      <header className="flex min-h-16 flex-none items-center gap-3 py-2">
-        <button aria-label="הגדרות הקבוצה" title="הגדרות הקבוצה" onClick={() => setSideOpen(true)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary"><Settings className="size-5" /></button>
-        <div className="hidden items-center gap-3 md:flex">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><MessageSquare className="size-5" /></div>
-          <span className="text-xl font-medium text-muted-foreground">צ'אט הקבוצה</span>
+      <header className="flex min-h-16 flex-none flex-wrap items-center gap-3 py-2">
+        <button aria-label="רשימת מרחבים" onClick={() => setNavOpen(true)} className="rounded-full p-2 text-muted-foreground hover:bg-field min-[1100px]:hidden"><Menu className="size-[22px]" /></button>
+        <div className="flex items-center gap-3 min-[1100px]:w-[272px]">
+          <div className="flex size-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground"><MessageSquare className="size-5" /></div>
+          <span className="hidden text-xl font-medium text-muted-foreground md:inline">Chat</span>
         </div>
-        <form onSubmit={runSearch} className="mx-auto flex h-12 min-w-0 max-w-2xl flex-1 items-center gap-3 rounded-full bg-secondary px-4 text-muted-foreground">
-          <Search className="size-5 flex-none" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בהודעות" className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground" />
+        <form onSubmit={runSearch} className="order-last flex h-11 min-w-[180px] basis-full items-center gap-3 rounded-full bg-field px-4 text-muted-foreground md:order-none md:mx-auto md:h-12 md:max-w-[720px] md:flex-1 md:basis-auto">
+          <Search className="size-[22px] flex-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש בהודעות" aria-label="חיפוש בהודעות" className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground" />
           {search && <button type="button" aria-label="ניקוי" onClick={() => { setSearch(""); setSearchResults(null); setTab("pinned"); }}><X className="size-4" /></button>}
         </form>
-        <button aria-label="לוח צד" onClick={() => setPanelOpen(true)} className="relative rounded-full p-2 text-muted-foreground hover:bg-secondary xl:hidden">
+        <button aria-label="לוח צד" onClick={() => setPanelOpen(true)} className="relative rounded-full p-2 text-muted-foreground hover:bg-field xl:hidden">
           <PanelLeft className="size-5" />
           {pendingCount > 0 && <span className="absolute -top-0.5 -start-0.5 min-w-[18px] rounded-full bg-destructive px-1 text-[11px] font-bold text-destructive-foreground">{pendingCount}</span>}
         </button>
+        <button aria-label="מעבר בין מצב בהיר לכהה" title="מעבר בין מצב בהיר לכהה" onClick={toggleTheme} className="rounded-full p-2 text-muted-foreground hover:bg-field">
+          {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button aria-label="התראות" className="relative rounded-full p-2 text-muted-foreground hover:bg-secondary">
+            <button aria-label="התראות" className="relative rounded-full bg-accent p-2.5 text-accent-foreground">
               <Bell className="size-5" />
               {notifs.length > 0 && <span className="absolute -top-0.5 -start-0.5 min-w-[18px] rounded-full bg-destructive px-1 text-[11px] font-bold text-destructive-foreground">{notifs.length}</span>}
             </button>
@@ -390,17 +408,18 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="flex items-center gap-2">
-          <div className="hidden text-end leading-tight sm:block">
+        <div className="flex items-center gap-2.5">
+          <div className="hidden text-end leading-tight md:block">
             <b className="block text-sm font-medium">{myName}</b>
             <small className="text-xs text-muted-foreground">{isAdmin ? "מנהל" : "חבר/ה"}</small>
           </div>
           <Avatar profile={me?.profile} size={36} />
-          <button aria-label="יציאה" onClick={signOut} className="rounded-full p-2 text-muted-foreground hover:bg-secondary"><LogOut className="size-5" /></button>
+          <button aria-label="יציאה" title="יציאה" onClick={signOut} className="rounded-full p-2 text-muted-foreground hover:bg-field"><LogOut className="size-5" /></button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1 gap-3 pb-3">
+        <aside className="hidden w-[272px] flex-none min-[1100px]:block">{nav}</aside>
 
         <main
           className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] bg-card"
@@ -408,12 +427,38 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
           onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
           onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) setDropped(f); }}
         >
-          <div className="flex flex-none items-center gap-3 border-b px-5 py-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-medium">{group.name}</h1>
-              <button onClick={() => setSideOpen(true)} className="text-xs text-muted-foreground hover:text-primary">{activeMembers.length} חברים</button>
+          <div className="flex-none px-3 shadow-[inset_0_-1px_0_var(--border)]">
+            <div className="flex min-h-16 items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button aria-label={`תפריט המרחב ${group.name}`} className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 text-start hover:bg-surface2">
+                    <SpaceAvatar name={group.name} size={40} />
+                    <h1 className="truncate text-lg font-medium">{group.name}</h1>
+                    <ChevronDown className="size-[18px] flex-none text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60" dir="rtl">
+                  <DropdownMenuItem onClick={() => setSideOpen(true)}><Users className="size-4" /> פרטי המרחב והחברים ({activeMembers.length})</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setTab("invite"); setPanelOpen(true); }}><Link2 className="size-4" /> הזמנת אנשים</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <span className="flex-1" />
+              <button aria-label="הודעות מוצמדות" title="הודעות מוצמדות" onClick={() => { setTab("pinned"); setPanelOpen(true); }} className="rounded-full p-2 text-muted-foreground hover:bg-field"><Pin className="size-5" /></button>
             </div>
           </div>
+          {pinned.length > 0 && (() => {
+            const i = pinIdx < pinned.length ? pinIdx : 0;
+            const pm = pinned[i]!;
+            return (
+              <div className="flex min-h-11 flex-none items-center gap-3 border-b bg-background px-3 md:px-5">
+                <span className="whitespace-nowrap rounded-lg bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">מוצמדת {i + 1} מתוך {pinned.length}</span>
+                <button aria-label="מעבר להודעה המוצמדת" onClick={() => { jumpTo(pm.id); setPinIdx((i + 1) % pinned.length); }} className="min-w-0 flex-1 truncate py-1.5 text-start">
+                  {nameOf(pm.author_id)}: {pm.body || pm.attachment_name || ""}
+                </button>
+                <button aria-label="כל ההודעות המוצמדות" onClick={() => { setTab("pinned"); setPanelOpen(true); }} className="rounded-full p-1.5 text-muted-foreground hover:bg-field"><ChevronDown className="size-[18px]" /></button>
+              </div>
+            );
+          })()}
           <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 md:px-4">
             {!hasMore && <p className="py-6 text-center text-xs text-muted-foreground">תחילת השיחה</p>}
             {visible.map((m, i) => {
@@ -459,14 +504,18 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
           )}
         </main>
 
-        <aside className="hidden w-[340px] flex-none overflow-hidden rounded-[20px] bg-card xl:block">{panel}</aside>
+        <aside className="hidden w-[360px] flex-none overflow-hidden rounded-[20px] bg-card xl:block">{panel}</aside>
       </div>
 
+      <Sheet open={navOpen} onOpenChange={setNavOpen}>
+        <SheetContent side="right" className="w-[min(300px,88vw)] p-3 min-[1100px]:hidden" dir="rtl"><SheetTitle className="sr-only">מרחבים</SheetTitle>{nav}</SheetContent>
+      </Sheet>
+      <CreateSpaceDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={onMembershipChanged} />
       <Sheet open={sideOpen} onOpenChange={setSideOpen}>
         <SheetContent side="right" className="w-[300px] p-0" dir="rtl"><SheetTitle className="sr-only">הגדרות הקבוצה</SheetTitle>{sidebar}</SheetContent>
       </Sheet>
       <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
-        <SheetContent side="left" className="w-[340px] p-0 xl:hidden" dir="rtl"><SheetTitle className="sr-only">לוח צד</SheetTitle>{panel}</SheetContent>
+        <SheetContent side="left" className="w-[360px] max-w-[92vw] p-0 xl:hidden" dir="rtl"><SheetTitle className="sr-only">לוח צד</SheetTitle>{panel}</SheetContent>
       </Sheet>
 
       <Dialog open={!!reporting} onOpenChange={(o) => !o && setReporting(null)}>

@@ -96,6 +96,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" },
     ],
+    // Apply a saved light/dark choice before first paint (no flash).
+    scripts: [
+      {
+        children:
+          'try{var t=localStorage.getItem("gc.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}',
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -105,7 +112,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="he" dir="rtl">
+    <html lang="he" dir="rtl" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

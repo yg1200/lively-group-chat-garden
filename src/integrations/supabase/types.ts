@@ -183,6 +183,7 @@ export type Database = {
           pinned_at: string | null
           pinned_by: string | null
           quote: Json | null
+          thread_root_id: string | null
         }
         Insert: {
           attachment_name?: string | null
@@ -200,6 +201,7 @@ export type Database = {
           pinned_at?: string | null
           pinned_by?: string | null
           quote?: Json | null
+          thread_root_id?: string | null
         }
         Update: {
           attachment_name?: string | null
@@ -217,6 +219,7 @@ export type Database = {
           pinned_at?: string | null
           pinned_by?: string | null
           quote?: Json | null
+          thread_root_id?: string | null
         }
         Relationships: [
           {
@@ -231,6 +234,75 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_root_id_fkey"
+            columns: ["thread_root_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          group_id: string
+          id: string
+          message_id: string
+          read_at: string | null
+          thread_root_id: string
+          user_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          group_id: string
+          id?: string
+          message_id: string
+          read_at?: string | null
+          thread_root_id: string
+          user_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          group_id?: string
+          id?: string
+          message_id?: string
+          read_at?: string | null
+          thread_root_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_thread_root_id_fkey"
+            columns: ["thread_root_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

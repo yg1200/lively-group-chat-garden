@@ -36,7 +36,7 @@ export function isBlockedFile(name: string) {
 }
 
 export function deletedLabel(m: Pick<Message, "deleted_by">) {
-  return m.deleted_by === "admin" ? "הודעה מחוקה על ידי מנהל" : "הודעה מחוקה על ידי כותב";
+  return m.deleted_by === "admin" ? "הודעה נמחקה על ידי המנהל" : "הודעה נמחקה על ידי כותב ההודעה";
 }
 
 export function initials(name: string) {
@@ -45,6 +45,12 @@ export function initials(name: string) {
 
 export function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Message time like Google Chat: "5 דקות" for the first hour, then HH:MM. */
+export function formatMsgTime(iso: string) {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  return mins < 60 ? `${Math.max(1, mins)} דקות` : formatTime(iso);
 }
 
 export function formatDay(iso: string) {

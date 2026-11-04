@@ -459,16 +459,16 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
               </div>
             );
           })()}
-          <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-2 py-3 md:px-4">
+          <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto py-2">
             {!hasMore && <p className="py-6 text-center text-xs text-muted-foreground">תחילת השיחה</p>}
             {visible.map((m, i) => {
               const prev = visible[i - 1];
               const newDay = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
-              const showHeader = newDay || !prev || prev.kind !== "user" || prev.author_id !== m.author_id || new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60000 || m.id === firstUnread;
+              const showHeader = newDay || !prev || prev.kind !== "user" || !!prev.deleted_by || prev.author_id !== m.author_id || new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60000 || m.id === firstUnread;
               return (
                 <Fragment key={m.id}>
-                  {newDay && <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground"><div className="h-px flex-1 bg-border" />{formatDay(m.created_at)}<div className="h-px flex-1 bg-border" /></div>}
-                  {m.id === firstUnread && <div className="my-3 flex items-center gap-3 text-xs font-medium text-destructive"><div className="h-px flex-1 bg-destructive" />הודעות חדשות<div className="h-px flex-1 bg-destructive" /></div>}
+                  {newDay && <div className="flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-muted-foreground md:px-6"><i className="h-px flex-1 bg-border" />{formatDay(m.created_at)}<i className="h-px flex-1 bg-border" /></div>}
+                  {m.id === firstUnread && <div className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-primary md:px-6"><i className="wavy-line" />לא נקראו<i className="wavy-line" /></div>}
                   <MessageItem
                     msg={m}
                     author={m.author_id ? memberMap.get(m.author_id) : undefined}

@@ -199,3 +199,22 @@
     line-height: 1.45;
   }
 }
+
+/* "Unread" divider: a wavy line that follows the theme color. */
+.wavy-line {
+  height: 6px;
+  flex: 1;
+  background: var(--primary);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 3Q3 0 6 3T12 3' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") repeat-x center;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 3Q3 0 6 3T12 3' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") repeat-x center;
+}
+
+/* Brief highlight when jumping to a message. */
+@keyframes msg-flash {
+  0%, 60% { background: var(--accent); }
+  100% { background: transparent; }
+}
+.msg-flash { animation: msg-flash 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .msg-flash { animation: none; background: var(--accent); }
+}

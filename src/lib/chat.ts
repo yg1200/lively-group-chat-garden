@@ -57,3 +57,22 @@ export function errorText(e: unknown) {
   if (msg.includes("invalid invite")) return "קישור ההזמנה אינו תקין";
   return "משהו השתבש, נסו שוב";
 }
+
+export type Notification = Tables<"notifications">;
+export type ThreadSummary = { count: number; authors: string[] };
+
+/** Active members (other than the author) whose last read time is at or after the message. */
+export function seenBy<T extends { user_id: string; status: string; last_read_at: string | null }>(
+  msg: Pick<Message, "author_id" | "created_at">,
+  members: T[],
+): T[] {
+  return members.filter((m) => m.status === "active" && m.user_id !== msg.author_id && !!m.last_read_at && m.last_read_at >= msg.created_at);
+}
+
+/** Summarise thread replies: count and up to 3 most recent distinct authors (newest first). */
+export function summarizeThread(replies: Pick<Message, "author_id" | "created_at">[]): ThreadSummary {
+  const sorted = [...replies].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  const authors: string[] = [];
+  for (const r of sorted) if (r.author_id && !authors.includes(r.author_id) && authors.length < 3) authors.push(r.author_id);
+  return { count: replies.length, authors };
+}

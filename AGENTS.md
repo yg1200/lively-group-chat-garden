@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Group chat permissions are enforced in the database (row rules + security-definer functions like decide_request, delete_message); the client only calls them. Why: the spec requires server-side enforcement.
+- Thread replies are messages with thread_root_id (one level, enforced by trigger); thread notifications are created by a DB trigger. Why: keeps threads searchable/editable like any message and server-enforced.

@@ -13,30 +13,13 @@ export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 export const BLOCKED_EXT = ["exe", "bat", "cmd", "sh", "msi", "scr", "com", "jar", "app"];
 export const QUICK_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
-/** Pastel background / dark ink pairs for space avatars (picked by a stable hash of the name). */
-const SPACE_COLORS: [string, string][] = [
-  ["oklch(0.911 0.06 154)", "oklch(0.319 0.075 151.7)"],
-  ["oklch(0.912 0.04 260.1)", "oklch(0.495 0.199 260.6)"],
-  ["oklch(0.917 0.052 58.7)", "oklch(0.38 0.101 49.5)"],
-  ["oklch(0.918 0.042 25.2)", "oklch(0.383 0.131 29)"],
-  ["oklch(0.916 0.037 303.1)", "oklch(0.36 0.176 296.3)"],
-  ["oklch(0.956 0.074 95.9)", "oklch(0.399 0.082 84.4)"],
-];
-
-export function spaceColors(name: string) {
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
-  const [bg, ink] = SPACE_COLORS[h % SPACE_COLORS.length]!;
-  return { bg, ink };
-}
-
 export function isBlockedFile(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   return BLOCKED_EXT.includes(ext);
 }
 
 export function deletedLabel(m: Pick<Message, "deleted_by">) {
-  return m.deleted_by === "admin" ? "הודעה נמחקה על ידי המנהל" : "הודעה נמחקה על ידי כותב ההודעה";
+  return m.deleted_by === "admin" ? "הודעה מחוקה על ידי מנהל" : "הודעה מחוקה על ידי כותב";
 }
 
 export function initials(name: string) {
@@ -45,12 +28,6 @@ export function initials(name: string) {
 
 export function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
-}
-
-/** Message time like Google Chat: "5 דקות" for the first hour, then HH:MM. */
-export function formatMsgTime(iso: string) {
-  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  return mins < 60 ? `${Math.max(1, mins)} דקות` : formatTime(iso);
 }
 
 export function formatDay(iso: string) {

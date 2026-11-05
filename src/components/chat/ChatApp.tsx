@@ -372,7 +372,7 @@ export function ChatApp({ groupId, userId, groups, onSwitchGroup, onMembershipCh
               {notifs.length > 0 && <span className="absolute -top-0.5 -start-0.5 min-w-[18px] rounded-full bg-destructive px-1 text-[11px] font-bold text-destructive-foreground">{notifs.length}</span>}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72" dir="rtl">
+          <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel>התראות</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifs.length === 0 && <div className="px-2 py-4 text-center text-sm text-muted-foreground">אין התראות חדשות</div>}

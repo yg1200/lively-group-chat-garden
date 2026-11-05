@@ -212,7 +212,7 @@ export function MessageItem(p: Props) {
             <DropdownMenuTrigger asChild>
               <IconAction label="עוד"><MoreVertical /></IconAction>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-72 w-56 overflow-y-auto" dir="rtl">
+            <DropdownMenuContent align="end" className="max-h-72 w-56 overflow-y-auto">
               <DropdownMenuLabel className="flex items-center gap-2"><Eye className="size-4" /> נצפתה על ידי {p.seen.length}</DropdownMenuLabel>
               {p.seen.length > 0 && <DropdownMenuSeparator />}
               {p.seen.map((m) => (
